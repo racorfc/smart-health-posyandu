@@ -1,0 +1,6 @@
+{
+  "name": "ESP32-C3 IoT Realtime Health & Sensor Dashboard",
+  "description": "Real-time internet telemetry monitoring dashboard for ESP32-C3 with temperature, pulse oximeter (SpO2 & heart rate), distance/height, and weight sensors.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
