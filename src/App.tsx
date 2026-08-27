@@ -34,9 +34,9 @@ export default function App() {
 
   const prevHeartbeatRef = useRef<number>(0);
 
-  // Fetch initial history
-  const fetchTelemetry = useCallback(async () => {
-    setIsRefreshing(true);
+  // Fetch initial history & background sync
+  const fetchTelemetry = useCallback(async (showLoading = false) => {
+    if (showLoading) setIsRefreshing(true);
     try {
       const res = await fetch('/api/telemetry/history?limit=100');
       if (res.ok) {
@@ -51,12 +51,16 @@ export default function App() {
       console.error('Error fetching telemetry history:', err);
       setIsConnected(false);
     } finally {
-      setIsRefreshing(false);
+      if (showLoading) setIsRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchTelemetry();
+    fetchTelemetry(true);
+    const interval = setInterval(() => {
+      fetchTelemetry(false);
+    }, 2500);
+    return () => clearInterval(interval);
   }, [fetchTelemetry]);
 
   // Real-time SSE Connection
