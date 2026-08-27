@@ -1,22 +1,26 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-let lastData = {
-  deviceId: "ESP32C3-HEALTH-01",
-  temperature: 36.5,
-  spo2: 98,
-  heartRate: 75,
-  distance: 170.0,
-  weight: 65.0,
-  battery: 100,
-  rssi: -60,
-  timestamp: new Date().toISOString()
-};
+// Shared state within lambda lifecycle
+let sensorHistory: any[] = [
+  {
+    id: "init-01",
+    timestamp: new Date().toISOString(),
+    deviceId: "ESP32C3-HEALTH-01",
+    temperature: 36.5,
+    spo2: 98,
+    heartRate: 75,
+    distance: 170.0,
+    weight: 65.0,
+    battery: 100,
+    rssi: -60
+  }
+];
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS
+  // Allow CORS from any origin
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-device-key');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-device-key');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -33,7 +37,9 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     const battery = typeof body.battery === 'number' ? body.battery : parseFloat(body.battery) || 100;
     const rssi = typeof body.rssi === 'number' ? body.rssi : parseFloat(body.rssi) || -60;
 
-    lastData = {
+    const newReading = {
+      id: `esp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: new Date().toISOString(),
       deviceId,
       temperature: +temperature.toFixed(2),
       spo2: +spo2.toFixed(1),
@@ -41,24 +47,27 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
       distance: +distance.toFixed(1),
       weight: +weight.toFixed(2),
       battery: Math.round(battery),
-      rssi: Math.round(rssi),
-      timestamp: new Date().toISOString()
+      rssi: Math.round(rssi)
     };
 
-    return res.status(201).json({
+    sensorHistory.push(newReading);
+    if (sensorHistory.length > 200) {
+      sensorHistory.shift();
+    }
+
+    return res.status(200).json({
       success: true,
       message: 'Telemetry received successfully',
-      reading: lastData
+      reading: newReading
     });
   }
 
-  if (req.method === 'GET') {
-    return res.status(200).json({
-      latest: lastData,
-      records: [lastData],
-      isOnline: true
-    });
-  }
-
-  return res.status(405).json({ error: 'Method Not Allowed' });
+  // GET Request (telemetry, history, latest)
+  const latest = sensorHistory[sensorHistory.length - 1];
+  return res.status(200).json({
+    latest,
+    records: sensorHistory,
+    isOnline: true,
+    count: sensorHistory.length
+  });
 }

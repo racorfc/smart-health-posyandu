@@ -1,4 +1,8 @@
 {
-  "buildCommand": "vite build",
-  "outputDirectory": "dist"
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/health", "destination": "/api/health" },
+    { "source": "/api/telemetry/(.*)", "destination": "/api/telemetry" },
+    { "source": "/api/telemetry", "destination": "/api/telemetry" }
+  ]
 }

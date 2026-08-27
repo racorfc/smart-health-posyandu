@@ -34,22 +34,25 @@ export default function App() {
 
   const prevHeartbeatRef = useRef<number>(0);
 
-  // Fetch initial history & background sync
+  // Fetch initial history & continuous polling
   const fetchTelemetry = useCallback(async (showLoading = false) => {
     if (showLoading) setIsRefreshing(true);
     try {
-      const res = await fetch('/api/telemetry/history?limit=100');
+      const res = await fetch('/api/telemetry');
       if (res.ok) {
         const data = await res.json();
         if (data.records && Array.isArray(data.records) && data.records.length > 0) {
           setHistory(data.records);
           setLatestData(data.records[data.records.length - 1]);
           setIsConnected(true);
+        } else if (data.latest) {
+          setLatestData(data.latest);
+          setHistory((prev) => [...prev.slice(-199), data.latest]);
+          setIsConnected(true);
         }
       }
     } catch (err) {
-      console.error('Error fetching telemetry history:', err);
-      setIsConnected(false);
+      console.error('Error fetching telemetry:', err);
     } finally {
       if (showLoading) setIsRefreshing(false);
     }
@@ -59,70 +62,71 @@ export default function App() {
     fetchTelemetry(true);
     const interval = setInterval(() => {
       fetchTelemetry(false);
-    }, 2500);
+    }, 1500);
     return () => clearInterval(interval);
   }, [fetchTelemetry]);
 
-  // Real-time SSE Connection
+  // Real-time SSE Connection (Optional accelerator)
   useEffect(() => {
     let eventSource: EventSource | null = null;
 
     const setupSSE = () => {
-      eventSource = new EventSource('/api/telemetry/stream');
+      try {
+        eventSource = new EventSource('/api/telemetry/stream');
 
-      eventSource.onopen = () => {
-        setIsConnected(true);
-        setIsStreaming(true);
-      };
-
-      eventSource.onmessage = (event) => {
-        try {
-          const newReading: SensorData = JSON.parse(event.data);
-          setLatestData(newReading);
+        eventSource.onopen = () => {
           setIsConnected(true);
+          setIsStreaming(true);
+        };
 
-          setHistory((prev) => {
-            // Deduplicate if reading with same id or timestamp is already in history
-            const existsIndex = prev.findIndex((item) => item.id === newReading.id || (item.timestamp === newReading.timestamp && item.deviceId === newReading.deviceId));
-            let next: SensorData[];
-            if (existsIndex >= 0) {
-              next = [...prev];
-              next[existsIndex] = newReading;
-            } else {
-              next = [...prev, newReading];
-            }
-            if (next.length > 200) {
-              return next.slice(-200);
-            }
-            return next;
-          });
+        eventSource.onmessage = (event) => {
+          try {
+            const newReading: SensorData = JSON.parse(event.data);
+            setLatestData(newReading);
+            setIsConnected(true);
 
-          // Sound triggers
-          if (soundEnabled) {
-            const now = Date.now();
-            if (now - prevHeartbeatRef.current > 700) {
-              playHeartbeatTone(newReading.heartRate);
-              prevHeartbeatRef.current = now;
-            }
+            setHistory((prev) => {
+              const existsIndex = prev.findIndex((item) => item.id === newReading.id || (item.timestamp === newReading.timestamp && item.deviceId === newReading.deviceId));
+              let next: SensorData[];
+              if (existsIndex >= 0) {
+                next = [...prev];
+                next[existsIndex] = newReading;
+              } else {
+                next = [...prev, newReading];
+              }
+              if (next.length > 200) {
+                return next.slice(-200);
+              }
+              return next;
+            });
 
-            if (newReading.temperature > 38.5 || newReading.spo2 < 92) {
-              playAlertAlarm();
+            // Sound triggers
+            if (soundEnabled) {
+              const now = Date.now();
+              if (now - prevHeartbeatRef.current > 700) {
+                playHeartbeatTone(newReading.heartRate);
+                prevHeartbeatRef.current = now;
+              }
+
+              if (newReading.temperature > 38.5 || newReading.spo2 < 92) {
+                playAlertAlarm();
+              }
             }
+          } catch (err) {
+            console.error('Failed to parse SSE payload:', err);
           }
-        } catch (err) {
-          console.error('Failed to parse SSE payload:', err);
-        }
-      };
+        };
 
-      eventSource.onerror = () => {
-        setIsConnected(false);
-        setIsStreaming(false);
-        if (eventSource) {
-          eventSource.close();
-        }
-        // Auto reconnect after 4 seconds
-        setTimeout(setupSSE, 4000);
-      };
+        eventSource.onerror = () => {
+          setIsStreaming(false);
+          if (eventSource) {
+            eventSource.close();
+          }
+          setTimeout(setupSSE, 8000);
+        };
+      } catch (e) {
+        // SSE not supported or unavailable
+      }
     };
 
     setupSSE();
