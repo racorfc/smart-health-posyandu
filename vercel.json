@@ -2,6 +2,7 @@
   "version": 2,
   "rewrites": [
     { "source": "/api/health", "destination": "/api/health" },
+    { "source": "/api/ai-analysis", "destination": "/api/ai-analysis" },
     { "source": "/api/telemetry/(.*)", "destination": "/api/telemetry" },
     { "source": "/api/telemetry", "destination": "/api/telemetry" }
   ]
