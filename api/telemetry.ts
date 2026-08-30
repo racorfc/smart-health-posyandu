@@ -27,6 +27,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'POST') {
+    const body = req.body || {};
     const last = sensorHistory.length > 0 ? sensorHistory[sensorHistory.length - 1] : {
       temperature: 36.5,
       spo2: 98,
