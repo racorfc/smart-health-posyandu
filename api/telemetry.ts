@@ -27,15 +27,33 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'POST') {
-    const body = req.body || {};
-    const temperature = typeof body.temperature === 'number' ? body.temperature : parseFloat(body.temperature || body.temp || body.suhu) || 36.5;
-    const spo2 = typeof body.spo2 === 'number' ? body.spo2 : parseFloat(body.spo2 || body.oxygen) || 98;
-    const heartRate = typeof body.heartRate === 'number' ? body.heartRate : parseFloat(body.heartRate || body.bpm || body.nadi) || 75;
-    const distance = typeof body.distance === 'number' ? body.distance : parseFloat(body.distance || body.dist || body.jarak || body.tinggi) || 170;
-    const weight = typeof body.weight === 'number' ? body.weight : parseFloat(body.weight || body.berat) || 65;
-    const deviceId = body.deviceId || body.device || 'ESP32C3-NODE';
-    const battery = typeof body.battery === 'number' ? body.battery : parseFloat(body.battery) || 100;
-    const rssi = typeof body.rssi === 'number' ? body.rssi : parseFloat(body.rssi) || -60;
+    const last = sensorHistory.length > 0 ? sensorHistory[sensorHistory.length - 1] : {
+      temperature: 36.5,
+      spo2: 98,
+      heartRate: 75,
+      distance: 170.0,
+      weight: 65.0,
+      battery: 100,
+      rssi: -60,
+      deviceId: 'ESP32C3-NODE'
+    };
+
+    const hasTemp = body.temperature !== undefined || body.temp !== undefined || body.suhu !== undefined;
+    const hasSpo2 = body.spo2 !== undefined || body.oxygen !== undefined;
+    const hasHeartRate = body.heartRate !== undefined || body.bpm !== undefined || body.nadi !== undefined;
+    const hasDistance = body.distance !== undefined || body.dist !== undefined || body.jarak !== undefined || body.tinggi !== undefined;
+    const hasWeight = body.weight !== undefined || body.berat !== undefined;
+    const hasBattery = body.battery !== undefined;
+    const hasRssi = body.rssi !== undefined;
+
+    const temperature = hasTemp ? (typeof body.temperature === 'number' ? body.temperature : parseFloat(body.temperature || body.temp || body.suhu) || last.temperature) : last.temperature;
+    const spo2 = hasSpo2 ? (typeof body.spo2 === 'number' ? body.spo2 : parseFloat(body.spo2 || body.oxygen) || last.spo2) : last.spo2;
+    const heartRate = hasHeartRate ? (typeof body.heartRate === 'number' ? body.heartRate : parseFloat(body.heartRate || body.bpm || body.nadi) || last.heartRate) : last.heartRate;
+    const distance = hasDistance ? (typeof body.distance === 'number' ? body.distance : parseFloat(body.distance || body.dist || body.jarak || body.tinggi) || last.distance) : last.distance;
+    const weight = hasWeight ? (typeof body.weight === 'number' ? body.weight : parseFloat(body.weight || body.berat) || last.weight) : last.weight;
+    const battery = hasBattery ? (typeof body.battery === 'number' ? body.battery : parseFloat(body.battery) || last.battery) : last.battery;
+    const rssi = hasRssi ? (typeof body.rssi === 'number' ? body.rssi : parseFloat(body.rssi) || last.rssi) : last.rssi;
+    const deviceId = body.deviceId || body.device || last.deviceId;
 
     const newReading = {
       id: `esp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
