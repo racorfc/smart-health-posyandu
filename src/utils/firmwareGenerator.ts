@@ -4,9 +4,265 @@ export function generateESP32C3Code(config: {
   serverUrl: string;
   deviceId: string;
   intervalMs: number;
+  nodeType?: 'all' | 'oxy' | 'weight' | 'height';
 }): string {
   const cleanUrl = config.serverUrl.replace(/\/$/, '');
   const postEndpoint = `${cleanUrl}/api/telemetry`;
+  const nodeType = config.nodeType || 'all';
+
+  if (nodeType === 'oxy') {
+    return `/*
+ * =================================================================================
+ * NODE 1: ESP32-C3 - Oximeter (MAX30102) & Suhu Tubuh (DS18B20)
+ * =================================================================================
+ * Libraries yang dibutuhkan (Install via Arduino Library Manager):
+ * 1. SparkFun MAX3010x Pulse and Proximity Sensor Library
+ * 2. OneWire by Jim Studt, Paul Stoffregen
+ * 3. DallasTemperature by Miles Burton
+ * 4. ArduinoJson by Benoit Blanchon
+ * =================================================================================
+ */
+
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <Wire.h>
+#include "MAX30105.h"
+#include "heartRate.h"
+#include <OneWire.h>
+#include <DallasTemperature.h>
+
+const char* ssid       = "${config.ssid || 'NAMA_WIFI_ANDA'}";
+const char* password   = "${config.pass || 'PASSWORD_WIFI_ANDA'}";
+const char* serverUrl  = "${postEndpoint}";
+const char* deviceId   = "${config.deviceId || 'ESP32-NODE-OXY'}";
+const unsigned long SEND_INTERVAL_MS = ${config.intervalMs || 2000};
+
+#define I2C_SDA_PIN 8
+#define I2C_SCL_PIN 9
+#define ONE_WIRE_BUS 4
+
+MAX30105 particleSensor;
+OneWire oneWire(ONE_WIRE_BUS);
+DallasTemperature tempSensor(&oneWire);
+
+float temperature = 36.5;
+int spo2 = 98;
+int heartRateBpm = 75;
+unsigned long lastSendTime = 0;
+long lastBeat = 0;
+
+void setup() {
+  Serial.begin(115200);
+  Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
+
+  if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) {
+    Serial.println("[WARN] MAX30102 tidak terdeteksi!");
+  } else {
+    particleSensor.setup();
+    particleSensor.setPulseAmplitudeRed(0x0A);
+    particleSensor.setPulseAmplitudeGreen(0);
+  }
+
+  tempSensor.begin();
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+  Serial.println("\\n[WIFI] Terhubung!");
+}
+
+void loop() {
+  long irValue = particleSensor.getIR();
+  if (irValue > 50000) {
+    if (checkForBeat(irValue)) {
+      long delta = millis() - lastBeat;
+      lastBeat = millis();
+      float bpm = 60.0 / (delta / 1000.0);
+      if (bpm >= 45.0 && bpm <= 185.0) heartRateBpm = (int)bpm;
+    }
+    spo2 = constrain(map(irValue, 50000, 120000, 95, 99), 90, 100);
+  }
+
+  if (millis() - lastSendTime >= SEND_INTERVAL_MS) {
+    lastSendTime = millis();
+    tempSensor.requestTemperatures();
+    float t = tempSensor.getTempCByIndex(0);
+    if (t >= 25.0 && t <= 48.0) temperature = t;
+    sendData();
+  }
+}
+
+void sendData() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  HTTPClient http;
+  http.begin(serverUrl);
+  http.addHeader("Content-Type", "application/json");
+
+  StaticJsonDocument<200> doc;
+  doc["deviceId"]    = deviceId;
+  doc["temperature"] = temperature;
+  doc["spo2"]        = spo2;
+  doc["heartRate"]   = heartRateBpm;
+  doc["rssi"]        = WiFi.RSSI();
+
+  String payload;
+  serializeJson(doc, payload);
+  int code = http.POST(payload);
+  Serial.printf("[NODE 1] Kirim -> Suhu: %.1f, SpO2: %d, BPM: %d (Res: %d)\\n", temperature, spo2, heartRateBpm, code);
+  http.end();
+}
+`;
+  }
+
+  if (nodeType === 'weight') {
+    return `/*
+ * =================================================================================
+ * NODE 2: ESP32-C3 - Timbangan Berat Badan Digital (HX711 + Load Cell)
+ * =================================================================================
+ * Libraries yang dibutuhkan:
+ * 1. HX711 Arduino Library by Bogdan Necula
+ * 2. ArduinoJson by Benoit Blanchon
+ * =================================================================================
+ */
+
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include "HX711.h"
+
+const char* ssid       = "${config.ssid || 'NAMA_WIFI_ANDA'}";
+const char* password   = "${config.pass || 'PASSWORD_WIFI_ANDA'}";
+const char* serverUrl  = "${postEndpoint}";
+const char* deviceId   = "${config.deviceId || 'ESP32-NODE-WEIGHT'}";
+const unsigned long SEND_INTERVAL_MS = ${config.intervalMs || 2000};
+
+#define HX711_DOUT 5
+#define HX711_SCK  6
+
+HX711 scale;
+const float CALIBRATION_FACTOR = -7050.0; // Kalibrasi sesuai load cell Anda
+float weightKg = 0.0;
+unsigned long lastSendTime = 0;
+
+void setup() {
+  Serial.begin(115200);
+  scale.begin(HX711_DOUT, HX711_SCK);
+  scale.set_scale(CALIBRATION_FACTOR);
+  scale.tare(); // Tare timbangan ke 0.00 kg
+
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+  Serial.println("\\n[WIFI] Terhubung!");
+}
+
+void loop() {
+  if (millis() - lastSendTime >= SEND_INTERVAL_MS) {
+    lastSendTime = millis();
+    if (scale.is_ready()) {
+      float w = scale.get_units(5);
+      weightKg = (w >= 0.0) ? w : 0.0;
+    }
+    sendWeight();
+  }
+}
+
+void sendWeight() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  HTTPClient http;
+  http.begin(serverUrl);
+  http.addHeader("Content-Type", "application/json");
+
+  StaticJsonDocument<200> doc;
+  doc["deviceId"] = deviceId;
+  doc["weight"]   = weightKg;
+  doc["rssi"]     = WiFi.RSSI();
+
+  String payload;
+  serializeJson(doc, payload);
+  int code = http.POST(payload);
+  Serial.printf("[NODE 2] Kirim Berat: %.2f kg (Res: %d)\\n", weightKg, code);
+  http.end();
+}
+`;
+  }
+
+  if (nodeType === 'height') {
+    return `/*
+ * =================================================================================
+ * NODE 3: ESP32-C3 - Pengukur Tinggi Badan (HC-SR04 Ultrasonic)
+ * =================================================================================
+ * Library yang dibutuhkan:
+ * 1. ArduinoJson by Benoit Blanchon
+ * =================================================================================
+ */
+
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+
+const char* ssid       = "${config.ssid || 'NAMA_WIFI_ANDA'}";
+const char* password   = "${config.pass || 'PASSWORD_WIFI_ANDA'}";
+const char* serverUrl  = "${postEndpoint}";
+const char* deviceId   = "${config.deviceId || 'ESP32-NODE-HEIGHT'}";
+const unsigned long SEND_INTERVAL_MS = ${config.intervalMs || 2000};
+
+#define TRIG_PIN 2
+#define ECHO_PIN 3
+
+const float SENSOR_CEILING_HEIGHT_CM = 200.0; // Tinggi tiang sensor dari lantai (cm)
+float bodyHeightCm = 0.0;
+unsigned long lastSendTime = 0;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  digitalWrite(TRIG_PIN, LOW);
+
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+  Serial.println("\\n[WIFI] Terhubung!");
+}
+
+void loop() {
+  if (millis() - lastSendTime >= SEND_INTERVAL_MS) {
+    lastSendTime = millis();
+    readHeight();
+    sendHeight();
+  }
+}
+
+void readHeight() {
+  digitalWrite(TRIG_PIN, LOW); delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH); delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+
+  long duration = pulseIn(ECHO_PIN, HIGH, 30000);
+  if (duration > 0) {
+    float distToHead = (duration * 0.034) / 2.0;
+    float calculated = SENSOR_CEILING_HEIGHT_CM - distToHead;
+    bodyHeightCm = (calculated >= 30.0 && calculated <= 220.0) ? calculated : 0.0;
+  }
+}
+
+void sendHeight() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  HTTPClient http;
+  http.begin(serverUrl);
+  http.addHeader("Content-Type", "application/json");
+
+  StaticJsonDocument<200> doc;
+  doc["deviceId"] = deviceId;
+  doc["distance"] = bodyHeightCm;
+  doc["rssi"]     = WiFi.RSSI();
+
+  String payload;
+  serializeJson(doc, payload);
+  int code = http.POST(payload);
+  Serial.printf("[NODE 3] Kirim Tinggi: %.1f cm (Res: %d)\\n", bodyHeightCm, code);
+  http.end();
+}
+`;
+  }
 
   return `/*
  * =================================================================================

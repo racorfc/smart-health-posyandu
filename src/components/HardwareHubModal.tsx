@@ -24,9 +24,10 @@ export const HardwareHubModal: React.FC<HardwareHubModalProps> = ({
   onClose,
 }) => {
   const [activeTab, setActiveTab] = useState<'code' | 'wiring' | 'api'>('code');
+  const [nodeType, setNodeType] = useState<'all' | 'oxy' | 'weight' | 'height'>('oxy');
   const [wifiSsid, setWifiSsid] = useState('MyHomeWiFi');
   const [wifiPass, setWifiPass] = useState('Secret1234');
-  const [deviceId, setDeviceId] = useState('ESP32C3-HEALTH-01');
+  const [deviceId, setDeviceId] = useState('ESP32-NODE-OXY');
   const [intervalMs, setIntervalMs] = useState(2000);
   const [copied, setCopied] = useState(false);
 
@@ -39,6 +40,7 @@ export const HardwareHubModal: React.FC<HardwareHubModalProps> = ({
     serverUrl: currentHost,
     deviceId,
     intervalMs,
+    nodeType,
   });
 
   const handleCopyCode = () => {
@@ -137,6 +139,67 @@ export const HardwareHubModal: React.FC<HardwareHubModalProps> = ({
           {/* TAB 1: CODE GENERATOR */}
           {activeTab === 'code' && (
             <div className="space-y-4">
+              
+              {/* Node Selection Selector */}
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-2">
+                  Pilih Node Target ESP32-C3:
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setNodeType('oxy'); setDeviceId('ESP32-NODE-OXY'); }}
+                    className={`px-3 py-2 text-xs font-medium rounded-xl border text-left transition ${
+                      nodeType === 'oxy'
+                        ? 'bg-cyan-950 border-cyan-400 text-cyan-200'
+                        : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span className="block font-bold text-white">Node 1: Oximeter & Suhu</span>
+                    <span className="text-[10px] opacity-75">MAX30102 + DS18B20</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setNodeType('weight'); setDeviceId('ESP32-NODE-WEIGHT'); }}
+                    className={`px-3 py-2 text-xs font-medium rounded-xl border text-left transition ${
+                      nodeType === 'weight'
+                        ? 'bg-cyan-950 border-cyan-400 text-cyan-200'
+                        : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span className="block font-bold text-white">Node 2: Timbangan Berat</span>
+                    <span className="text-[10px] opacity-75">HX711 + Load Cell</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setNodeType('height'); setDeviceId('ESP32-NODE-HEIGHT'); }}
+                    className={`px-3 py-2 text-xs font-medium rounded-xl border text-left transition ${
+                      nodeType === 'height'
+                        ? 'bg-cyan-950 border-cyan-400 text-cyan-200'
+                        : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span className="block font-bold text-white">Node 3: Pengukur Tinggi</span>
+                    <span className="text-[10px] opacity-75">Ultrasonik HC-SR04</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setNodeType('all'); setDeviceId('ESP32C3-HEALTH-01'); }}
+                    className={`px-3 py-2 text-xs font-medium rounded-xl border text-left transition ${
+                      nodeType === 'all'
+                        ? 'bg-cyan-950 border-cyan-400 text-cyan-200'
+                        : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span className="block font-bold text-white">All-in-One Node</span>
+                    <span className="text-[10px] opacity-75">Semua Sensor Sekaligus</span>
+                  </button>
+                </div>
+              </div>
+
               {/* Parameter Inputs */}
               <div className="bg-slate-800/60 p-4 rounded-2xl border border-slate-700/60 grid grid-cols-1 sm:grid-cols-4 gap-3">
                 <div>
