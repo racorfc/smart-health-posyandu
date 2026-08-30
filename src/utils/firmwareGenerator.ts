@@ -13,13 +13,11 @@ export function generateESP32C3Code(config: {
   if (nodeType === 'oxy') {
     return `/*
  * =================================================================================
- * NODE 1: ESP32-C3 - Oximeter (MAX30102) & Suhu Tubuh (DS18B20)
+ * NODE 1: ESP32-C3 - Oximeter & Heart Rate (MAX30102 Saja - Tanpa Suhu)
  * =================================================================================
  * Libraries yang dibutuhkan (Install via Arduino Library Manager):
  * 1. SparkFun MAX3010x Pulse and Proximity Sensor Library
- * 2. OneWire by Jim Studt, Paul Stoffregen
- * 3. DallasTemperature by Miles Burton
- * 4. ArduinoJson by Benoit Blanchon
+ * 2. ArduinoJson by Benoit Blanchon
  * =================================================================================
  */
 
@@ -29,8 +27,6 @@ export function generateESP32C3Code(config: {
 #include <Wire.h>
 #include "MAX30105.h"
 #include "heartRate.h"
-#include <OneWire.h>
-#include <DallasTemperature.h>
 
 const char* ssid       = "${config.ssid || 'NAMA_WIFI_ANDA'}";
 const char* password   = "${config.pass || 'PASSWORD_WIFI_ANDA'}";
@@ -40,13 +36,9 @@ const unsigned long SEND_INTERVAL_MS = ${config.intervalMs || 2000};
 
 #define I2C_SDA_PIN 8
 #define I2C_SCL_PIN 9
-#define ONE_WIRE_BUS 4
 
 MAX30105 particleSensor;
-OneWire oneWire(ONE_WIRE_BUS);
-DallasTemperature tempSensor(&oneWire);
 
-float temperature = 36.5;
 int spo2 = 98;
 int heartRateBpm = 75;
 unsigned long lastSendTime = 0;
@@ -57,14 +49,13 @@ void setup() {
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
 
   if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) {
-    Serial.println("[WARN] MAX30102 tidak terdeteksi!");
+    Serial.println("[WARN] MAX30102 tidak terdeteksi! Cek kabel SDA/SCL.");
   } else {
     particleSensor.setup();
     particleSensor.setPulseAmplitudeRed(0x0A);
     particleSensor.setPulseAmplitudeGreen(0);
   }
 
-  tempSensor.begin();
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
   Serial.println("\\n[WIFI] Terhubung!");
@@ -84,9 +75,6 @@ void loop() {
 
   if (millis() - lastSendTime >= SEND_INTERVAL_MS) {
     lastSendTime = millis();
-    tempSensor.requestTemperatures();
-    float t = tempSensor.getTempCByIndex(0);
-    if (t >= 25.0 && t <= 48.0) temperature = t;
     sendData();
   }
 }
@@ -99,7 +87,6 @@ void sendData() {
 
   StaticJsonDocument<200> doc;
   doc["deviceId"]    = deviceId;
-  doc["temperature"] = temperature;
   doc["spo2"]        = spo2;
   doc["heartRate"]   = heartRateBpm;
   doc["rssi"]        = WiFi.RSSI();
@@ -107,7 +94,7 @@ void sendData() {
   String payload;
   serializeJson(doc, payload);
   int code = http.POST(payload);
-  Serial.printf("[NODE 1] Kirim -> Suhu: %.1f, SpO2: %d, BPM: %d (Res: %d)\\n", temperature, spo2, heartRateBpm, code);
+  Serial.printf("[NODE 1] Kirim -> SpO2: %d%%, BPM: %d (Res: %d)\\n", spo2, heartRateBpm, code);
   http.end();
 }
 `;
