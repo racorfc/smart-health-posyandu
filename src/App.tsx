@@ -20,8 +20,25 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  const [history, setHistory] = useState<SensorData[]>([]);
-  const [latestData, setLatestData] = useState<SensorData | null>(null);
+  // Load initial state from localStorage so data never resets
+  const [history, setHistory] = useState<SensorData[]>(() => {
+    try {
+      const saved = localStorage.getItem('posyandu_history');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [latestData, setLatestData] = useState<SensorData | null>(() => {
+    try {
+      const saved = localStorage.getItem('posyandu_latest_data');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
+  });
+
   const [isConnected, setIsConnected] = useState(true);
   const [isStreaming, setIsStreaming] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
@@ -34,21 +51,51 @@ export default function App() {
 
   const prevHeartbeatRef = useRef<number>(0);
 
-  // Fetch initial history & continuous polling
+  // Fetch initial history & continuous polling without resetting to seed
   const fetchTelemetry = useCallback(async (showLoading = false) => {
     if (showLoading) setIsRefreshing(true);
     try {
       const res = await fetch('/api/telemetry');
       if (res.ok) {
         const data = await res.json();
-        if (data.records && Array.isArray(data.records) && data.records.length > 0) {
-          setHistory(data.records);
-          setLatestData(data.records[data.records.length - 1]);
-          setIsConnected(true);
-        } else if (data.latest) {
-          setLatestData(data.latest);
-          setHistory((prev) => [...prev.slice(-199), data.latest]);
-          setIsConnected(true);
+        if (data.records && Array.isArray(data.records)) {
+          // Filter out generic cold-start initial seeds if we already have real readings
+          const validRecords = data.records.filter((r: SensorData) => r.id && r.id !== 'init-01');
+          
+          if (validRecords.length > 0) {
+            const incomingLatest = validRecords[validRecords.length - 1];
+
+            setLatestData((prev) => {
+              if (!prev || !prev.timestamp || new Date(incomingLatest.timestamp) >= new Date(prev.timestamp)) {
+                try {
+                  localStorage.setItem('posyandu_latest_data', JSON.stringify(incomingLatest));
+                } catch {}
+                return incomingLatest;
+              }
+              return prev;
+            });
+
+            setHistory((prev) => {
+              const combined = [...prev];
+              for (const rec of validRecords) {
+                if (!combined.some((item) => item.id === rec.id || (item.timestamp === rec.timestamp && item.deviceId === rec.deviceId))) {
+                  combined.push(rec);
+                }
+              }
+              const result = combined.slice(-200);
+              try {
+                localStorage.setItem('posyandu_history', JSON.stringify(result));
+              } catch {}
+              return result;
+            });
+            setIsConnected(true);
+          } else if (data.latest && data.latest.id !== 'init-01') {
+            setLatestData(data.latest);
+            try {
+              localStorage.setItem('posyandu_latest_data', JSON.stringify(data.latest));
+            } catch {}
+            setIsConnected(true);
+          }
         }
       }
     } catch (err) {
@@ -157,7 +204,16 @@ export default function App() {
         const result = await res.json();
         if (result.reading) {
           setLatestData(result.reading);
-          setHistory((prev) => [...prev.slice(-199), result.reading]);
+          try {
+            localStorage.setItem('posyandu_latest_data', JSON.stringify(result.reading));
+          } catch {}
+          setHistory((prev) => {
+            const next = [...prev.slice(-199), result.reading];
+            try {
+              localStorage.setItem('posyandu_history', JSON.stringify(next));
+            } catch {}
+            return next;
+          });
           setIsConnected(true);
         }
       }
@@ -169,8 +225,12 @@ export default function App() {
   // Clear history
   const handleClearHistory = async () => {
     try {
+      localStorage.removeItem('posyandu_latest_data');
+      localStorage.removeItem('posyandu_history');
+      setHistory([]);
+      setLatestData(null);
       await fetch('/api/telemetry/history', { method: 'DELETE' });
-      fetchTelemetry();
+      fetchTelemetry(true);
     } catch (err) {
       console.error('Failed to clear history:', err);
     }

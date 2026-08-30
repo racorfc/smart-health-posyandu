@@ -81,6 +81,11 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
     });
   }
 
+  if (req.method === 'DELETE') {
+    sensorHistory.length = 0;
+    return res.status(200).json({ success: true, message: 'Sensor history cleared' });
+  }
+
   // GET Request (telemetry, history, latest)
   const latest = sensorHistory[sensorHistory.length - 1];
   return res.status(200).json({
