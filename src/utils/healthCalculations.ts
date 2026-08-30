@@ -26,27 +26,33 @@ export function evaluateHealthMetrics(data: SensorData): HealthAssessment {
   else if (data.temperature <= 38.5) temperatureStatus = 'Demam Rendah';
   else temperatureStatus = 'Demam Tinggi';
 
-  // SpO2
+  // SpO2 (Hanya evaluasi jika ada jari terdeteksi / > 0)
   let spo2Status: HealthAssessment['spo2Status'] = 'Normal';
-  if (data.spo2 >= 95) spo2Status = 'Normal';
-  else if (data.spo2 >= 90) spo2Status = 'Waspada';
-  else spo2Status = 'Kritis (Hipoksia)';
+  if (data.spo2 > 0) {
+    if (data.spo2 >= 95) spo2Status = 'Normal';
+    else if (data.spo2 >= 90) spo2Status = 'Waspada';
+    else spo2Status = 'Kritis (Hipoksia)';
+  }
 
-  // Heart Rate
+  // Heart Rate (Hanya evaluasi jika ada jari terdeteksi / > 0)
   let heartRateStatus: HealthAssessment['heartRateStatus'] = 'Normal';
-  if (data.heartRate < 60) heartRateStatus = 'Bradikardia';
-  else if (data.heartRate <= 100) heartRateStatus = 'Normal';
-  else heartRateStatus = 'Takikardia';
+  if (data.heartRate > 0) {
+    if (data.heartRate < 60) heartRateStatus = 'Bradikardia';
+    else if (data.heartRate <= 100) heartRateStatus = 'Normal';
+    else heartRateStatus = 'Takikardia';
+  }
 
   // Overall Risk
   let riskScore = 0;
   if (temperatureStatus === 'Demam Tinggi' || temperatureStatus === 'Hipotermia') riskScore += 2;
   else if (temperatureStatus === 'Demam Rendah') riskScore += 1;
 
-  if (spo2Status === 'Kritis (Hipoksia)') riskScore += 3;
-  else if (spo2Status === 'Waspada') riskScore += 1;
+  if (data.spo2 > 0) {
+    if (spo2Status === 'Kritis (Hipoksia)') riskScore += 3;
+    else if (spo2Status === 'Waspada') riskScore += 1;
+  }
 
-  if (heartRateStatus !== 'Normal') riskScore += 1;
+  if (data.heartRate > 0 && heartRateStatus !== 'Normal') riskScore += 1;
   if (bmiCategory === 'Obesity') riskScore += 1;
 
   let overallRisk: HealthAssessment['overallRisk'] = 'Sehat';

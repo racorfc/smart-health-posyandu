@@ -181,7 +181,7 @@ void loop() {
       }
     }
   } else {
-    // JARI DILEPAS / TIDAK ADA JARI -> RESET NILAI KE 0 (TIDAK ADA NILAI PALSU)
+    // JARI DILEPAS / TIDAK ADA JARI -> RESET NILAI KE 0 (STANDBY)
     beatAvg = 0;
     spo2Value = 0;
   }
@@ -191,11 +191,7 @@ void loop() {
   // ----------------------------------------
   if (millis() - lastSendTime >= SEND_INTERVAL_MS) {
     lastSendTime = millis();
-
-    // Hanya kirim jika jari sedang menempel (nilai > 0)
-    if (beatAvg > 0 || spo2Value > 0) {
-      sendTelemetry();
-    }
+    sendTelemetry();
   }
 
   // ----------------------------------------
@@ -204,16 +200,19 @@ void loop() {
   if (millis() - lastDiagnosticTime > 600) {
     lastDiagnosticTime = millis();
     Serial.print("[Node OXY] Mode: ");
-    Serial.print(currentMode == 1 ? "BPM" : "SpO2");
+    Serial.print(currentMode == 1 ? "BPM" : "SpO2 (Maxim)");
     Serial.print(" | IR: ");
     Serial.print(irValue);
-    Serial.print(" | Jantung: ");
-    if (beatAvg == 0) Serial.print("--- (Jari tidak terpasang)");
-    else { Serial.print(beatAvg); Serial.print(" BPM"); }
-
-    Serial.print(" | SpO2: ");
-    if (spo2Value == 0) Serial.print("---");
-    else { Serial.print(spo2Value); Serial.print(" %"); }
+    
+    if (irValue < 50000) {
+      Serial.print(" | 👆 JARI TIDAK TERDETEKSI! Silakan sentuh sensor...");
+    } else {
+      Serial.print(" | Nadi: ");
+      Serial.print(beatAvg);
+      Serial.print(" BPM | SpO2: ");
+      Serial.print(spo2Value);
+      Serial.print(" %");
+    }
 
     Serial.print(" | Status Kirim: ");
     Serial.println(lastSendStatus);

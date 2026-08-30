@@ -12,7 +12,8 @@ import {
   Droplet,
   Zap,
   Info,
-  Search
+  Search,
+  Hand
 } from 'lucide-react';
 import { SensorData, HealthAssessment } from '../types';
 import { evaluateHealthMetrics } from '../utils/healthCalculations';
@@ -124,42 +125,60 @@ export const VitalsGauges: React.FC<VitalsGaugesProps> = ({
                 Oximeter
               </span>
               <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full border ${
-                assessment.spo2Status === 'Normal'
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                  : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                (current.spo2 > 0 && current.heartRate > 0)
+                  ? (assessment.spo2Status === 'Normal'
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                      : 'bg-rose-500/10 text-rose-400 border-rose-500/30')
+                  : 'bg-cyan-500/10 text-cyan-300 border-cyan-500/30 animate-pulse'
               }`}>
-                {assessment.spo2Status}
+                {(current.spo2 > 0 && current.heartRate > 0) ? assessment.spo2Status : 'Standby / Sentuh Sensor'}
               </span>
             </div>
           </div>
 
-          <div className="mt-5 mb-3">
-            <div className="text-5xl sm:text-6xl font-bold text-white flex items-baseline gap-1 font-mono tracking-tight">
-              {current.spo2} <span className="text-xl sm:text-2xl text-slate-500 font-sans">%</span>
-            </div>
-            <div className="text-sm text-slate-400 font-medium mt-1">SpO2 Saturation (MAX30102)</div>
-          </div>
-
-          {/* Heart Rate & Waveform Equalizer */}
-          <div className="mt-4 border-t border-slate-700/50 pt-4 flex items-center justify-between">
-            <div>
-              <div className="text-3xl font-bold text-rose-400 font-mono flex items-baseline gap-1">
-                {current.heartRate} <span className="text-xs text-slate-400 uppercase tracking-widest font-sans font-bold">bpm</span>
+          {(current.spo2 > 0 || current.heartRate > 0) ? (
+            <>
+              <div className="mt-5 mb-3">
+                <div className="text-5xl sm:text-6xl font-bold text-white flex items-baseline gap-1 font-mono tracking-tight">
+                  {current.spo2} <span className="text-xl sm:text-2xl text-slate-500 font-sans">%</span>
+                </div>
+                <div className="text-sm text-slate-400 font-medium mt-1">SpO2 Saturation (MAX30102)</div>
               </div>
-              <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                Min: {minHr} • Max: {maxHr}
-              </div>
-            </div>
 
-            {/* Heartbeat Rhythm Visualizer Equalizer */}
-            <div className="flex gap-1.5 items-end h-8">
-              <div className="w-1.5 bg-rose-500/40 h-4 rounded-full animate-pulse" style={{ animationDelay: '0.1s' }} />
-              <div className="w-1.5 bg-rose-500/60 h-6 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
-              <div className="w-1.5 bg-rose-500/80 h-3 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }} />
-              <div className="w-1.5 bg-rose-500 h-8 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
-              <div className="w-1.5 bg-rose-500/70 h-5 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }} />
+              {/* Heart Rate & Waveform Equalizer */}
+              <div className="mt-4 border-t border-slate-700/50 pt-4 flex items-center justify-between">
+                <div>
+                  <div className="text-3xl font-bold text-rose-400 font-mono flex items-baseline gap-1">
+                    {current.heartRate} <span className="text-xs text-slate-400 uppercase tracking-widest font-sans font-bold">bpm</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                    Min: {minHr > 0 ? minHr : current.heartRate} • Max: {maxHr > 0 ? maxHr : current.heartRate}
+                  </div>
+                </div>
+
+                {/* Heartbeat Rhythm Visualizer Equalizer */}
+                <div className="flex gap-1.5 items-end h-8">
+                  <div className="w-1.5 bg-rose-500/40 h-4 rounded-full animate-pulse" style={{ animationDelay: '0.1s' }} />
+                  <div className="w-1.5 bg-rose-500/60 h-6 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }} />
+                  <div className="w-1.5 bg-rose-500/80 h-3 rounded-full animate-pulse" style={{ animationDelay: '0.3s' }} />
+                  <div className="w-1.5 bg-rose-500 h-8 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }} />
+                  <div className="w-1.5 bg-rose-500/70 h-5 rounded-full animate-pulse" style={{ animationDelay: '0.5s' }} />
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="my-5 py-5 px-3 bg-slate-900/80 rounded-2xl border border-cyan-500/30 text-center flex flex-col items-center justify-center space-y-2 relative overflow-hidden shadow-inner">
+              <div className="w-12 h-12 rounded-2xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/40 flex items-center justify-center animate-bounce shadow-lg shadow-cyan-500/20">
+                <Hand className="w-6 h-6" />
+              </div>
+              <div className="text-sm font-bold text-white tracking-wide">
+                👆 Sentuh / Tempelkan Jari ke Sensor
+              </div>
+              <p className="text-[11px] text-slate-400 max-w-[240px] leading-relaxed">
+                Letakkan ujung jari rapat di atas sensor MAX30102 untuk mengukur SpO2 & Nadi.
+              </p>
             </div>
-          </div>
+          )}
         </div>
 
         {/* CARD 2: AMBIENT TEMPERATURE (DS18B20/MLX) - Span 8 on Large */}
